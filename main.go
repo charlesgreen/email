@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	_ "github.com/emersion/go-message/charset"
@@ -20,34 +21,35 @@ import (
 
 // Security configuration constants
 const (
-	MaxFileSizeBytes     = 50 * 1024 * 1024   // 50MB limit
-	MaxHeaderLength      = 10000              // Maximum header field length
-	MaxZipFiles          = 100                // Maximum files in ZIP archive
-	MaxUncompressedSize  = 100 * 1024 * 1024  // 100MB uncompressed limit
-	MaxCompressionRatio  = 100                // 100:1 compression ratio limit
-	MaxHeaderSearchBytes = 10000              // Limit for binary header search
-	MaxRegexMatches      = 50                 // Limit regex matches to prevent ReDoS
+	MaxFileSizeBytes     = 50 * 1024 * 1024  // 50MB limit
+	MaxHeaderLength      = 10000             // Maximum header field length
+	MaxZipFiles          = 100               // Maximum files in ZIP archive
+	MaxUncompressedSize  = 100 * 1024 * 1024 // 100MB uncompressed limit
+	MaxCompressionRatio  = 100               // 100:1 compression ratio limit
+	MaxHeaderSearchBytes = 10000             // Limit for binary header search
+	MaxRegexMatches      = 50                // Limit regex matches to prevent ReDoS
 )
 
 // EmailSecurityReport contains the analysis results of email security headers
 type EmailSecurityReport struct {
-	From              string              `json:"from"`
-	To                string              `json:"to"`
-	Subject           string              `json:"subject"`
-	Date              string              `json:"date"`
-	MessageID         string              `json:"message_id"`
-	SPFResults        []SPFResult         `json:"spf_results"`
-	DKIMResults       []DKIMResult        `json:"dkim_results"`
-	DMARCResults      []DMARCResult       `json:"dmarc_results"`
-	AuthResults       []AuthResult        `json:"auth_results"`
-	ARCResults        []ARCResult         `json:"arc_results"`
-	ReceivedSPF       string              `json:"received_spf"`
-	RawHeaders        map[string][]string `json:"raw_headers,omitempty"`
+	From         string              `json:"from"`
+	To           string              `json:"to"`
+	Subject      string              `json:"subject"`
+	Date         string              `json:"date"`
+	MessageID    string              `json:"message_id"`
+	SPFResults   []SPFResult         `json:"spf_results"`
+	DKIMResults  []DKIMResult        `json:"dkim_results"`
+	DMARCResults []DMARCResult       `json:"dmarc_results"`
+	AuthResults  []AuthResult        `json:"auth_results"`
+	ARCResults   []ARCResult         `json:"arc_results"`
+	SCL          *SCLResult          `json:"scl,omitempty"`
+	ReceivedSPF  string              `json:"received_spf"`
+	RawHeaders   map[string][]string `json:"raw_headers,omitempty"`
 }
 
 // SPFResult represents SPF authentication result
 type SPFResult struct {
-	Result      string `json:"result"`       // pass, fail, softfail, neutral, none, temperror, permerror
+	Result      string `json:"result"` // pass, fail, softfail, neutral, none, temperror, permerror
 	Domain      string `json:"domain"`
 	Explanation string `json:"explanation"`
 	ClientIP    string `json:"client_ip,omitempty"`
@@ -55,7 +57,7 @@ type SPFResult struct {
 
 // DKIMResult represents DKIM signature validation result
 type DKIMResult struct {
-	Result    string `json:"result"`    // pass, fail, neutral, temperror, permerror, none
+	Result    string `json:"result"` // pass, fail, neutral, temperror, permerror, none
 	Domain    string `json:"domain"`
 	Selector  string `json:"selector"`
 	Signature string `json:"signature,omitempty"`
@@ -66,25 +68,25 @@ type DKIMResult struct {
 
 // DMARCResult represents DMARC policy evaluation result
 type DMARCResult struct {
-	Result          string `json:"result"`           // pass, fail, none
-	Policy          string `json:"policy"`           // none, quarantine, reject
-	Disposition     string `json:"disposition"`      // none, quarantine, reject
-	SPFAlignment    string `json:"spf_alignment"`    // pass, fail
-	DKIMAlignment   string `json:"dkim_alignment"`   // pass, fail
+	Result          string `json:"result"`         // pass, fail, none
+	Policy          string `json:"policy"`         // none, quarantine, reject
+	Disposition     string `json:"disposition"`    // none, quarantine, reject
+	SPFAlignment    string `json:"spf_alignment"`  // pass, fail
+	DKIMAlignment   string `json:"dkim_alignment"` // pass, fail
 	Domain          string `json:"domain"`
 	SubdomainPolicy string `json:"subdomain_policy,omitempty"`
 }
 
 // AuthResult represents parsed Authentication-Results header
 type AuthResult struct {
-	AuthServID string         `json:"authserv_id"`
-	Version    int            `json:"version,omitempty"`
-	Methods    []AuthMethod   `json:"methods"`
+	AuthServID string       `json:"authserv_id"`
+	Version    int          `json:"version,omitempty"`
+	Methods    []AuthMethod `json:"methods"`
 }
 
 // AuthMethod represents individual authentication method result
 type AuthMethod struct {
-	Method     string            `json:"method"`      // spf, dkim, dmarc, arc
+	Method     string            `json:"method"` // spf, dkim, dmarc, arc
 	Result     string            `json:"result"`
 	Reason     string            `json:"reason,omitempty"`
 	Properties map[string]string `json:"properties,omitempty"`
@@ -95,6 +97,14 @@ type ARCResult struct {
 	Instance int    `json:"instance"` // i= parameter
 	Result   string `json:"result"`   // pass, fail, none
 	Chain    string `json:"chain"`    // none, fail, pass
+}
+
+// SCLResult represents Microsoft Spam Confidence Level result
+type SCLResult struct {
+	Score        int    `json:"score"`         // -1 to 9 (higher = more likely spam)
+	Description  string `json:"description"`   // Human-readable description
+	HeaderSource string `json:"header_source"` // Source header name
+	RawHeader    string `json:"raw_header"`    // Full header value
 }
 
 func main() {
@@ -364,7 +374,7 @@ func extractRFC822FromBinary(data []byte) []byte {
 
 		// Verify we have valid headers
 		if bytes.Contains(cleanedHeaders, []byte("From:")) ||
-		   bytes.Contains(cleanedHeaders, []byte("Subject:")) {
+			bytes.Contains(cleanedHeaders, []byte("Subject:")) {
 			return cleanedHeaders
 		}
 	}
@@ -401,7 +411,7 @@ func extractRFC822FromBinary(data []byte) []byte {
 		cleanedHeaders := bytes.ReplaceAll(headerData, []byte{0}, []byte{})
 
 		if bytes.Contains(cleanedHeaders, []byte("From:")) ||
-		   bytes.Contains(cleanedHeaders, []byte("Subject:")) {
+			bytes.Contains(cleanedHeaders, []byte("Subject:")) {
 			return cleanedHeaders
 		}
 	}
@@ -454,7 +464,7 @@ func extractRFC822FromBinary(data []byte) []byte {
 		cleanedHeaders := bytes.ReplaceAll(headerData, []byte{0}, []byte{})
 
 		if bytes.Contains(cleanedHeaders, []byte("From:")) ||
-		   bytes.Contains(cleanedHeaders, []byte("Authentication-Results:")) {
+			bytes.Contains(cleanedHeaders, []byte("Authentication-Results:")) {
 			return cleanedHeaders
 		}
 	}
@@ -527,6 +537,9 @@ func parseEmail(data []byte, includeRawHeaders bool) (*EmailSecurityReport, erro
 
 	// Extract ARC results
 	report.ARCResults = extractARCResults(msg.Header)
+
+	// Extract SCL (Spam Confidence Level) results
+	report.SCL = extractSCLResults(msg.Header)
 
 	return report, nil
 }
@@ -924,6 +937,101 @@ func parseAuthResultsForARC(authResult string) *ARCResult {
 	return nil
 }
 
+// extractSCLResults extracts Microsoft Spam Confidence Level from X-Forefront-Antispam-Report headers
+//
+// SECURITY NOTE: X-Forefront-Antispam-Report headers can be spoofed by attackers.
+// This header should ONLY be trusted when the email is received from authenticated
+// Microsoft Exchange Online servers. Always verify the Received headers and
+// authentication results (SPF/DKIM/DMARC) to ensure the email actually originated
+// from Microsoft infrastructure before trusting the SCL score for security decisions.
+func extractSCLResults(header mail.Header) *SCLResult {
+	// Check X-Forefront-Antispam-Report header (trusted)
+	forefrontReport := header.Get("X-Forefront-Antispam-Report")
+	if forefrontReport != "" {
+		// Validate header length
+		if len(forefrontReport) > MaxHeaderLength {
+			log.Printf("Warning: X-Forefront-Antispam-Report header exceeds maximum length, truncating")
+			forefrontReport = forefrontReport[:MaxHeaderLength]
+		}
+
+		result := parseSCLHeader(forefrontReport, "X-Forefront-Antispam-Report")
+		if result != nil {
+			return result
+		}
+	}
+
+	// Check X-Forefront-Antispam-Report-Untrusted header (alternative source)
+	forefrontUntrusted := header.Get("X-Forefront-Antispam-Report-Untrusted")
+	if forefrontUntrusted != "" {
+		// Validate header length
+		if len(forefrontUntrusted) > MaxHeaderLength {
+			log.Printf("Warning: X-Forefront-Antispam-Report-Untrusted header exceeds maximum length, truncating")
+			forefrontUntrusted = forefrontUntrusted[:MaxHeaderLength]
+		}
+
+		result := parseSCLHeader(forefrontUntrusted, "X-Forefront-Antispam-Report-Untrusted")
+		if result != nil {
+			return result
+		}
+	}
+
+	return nil
+}
+
+// parseSCLHeader parses SCL value from X-Forefront-Antispam-Report header
+func parseSCLHeader(header string, headerSource string) *SCLResult {
+	// Use regex to extract SCL:value pattern
+	// Pattern is safe from ReDoS: simple literal + digit capture group with no backtracking
+	sclRegex := regexp.MustCompile(`SCL:(-?\d+)`)
+	matches := sclRegex.FindStringSubmatch(header)
+
+	if len(matches) > 1 {
+		// Use strconv.Atoi for robust integer parsing with proper error handling
+		score, err := strconv.Atoi(matches[1])
+		if err != nil {
+			log.Printf("Warning: Failed to parse SCL score from value '%s': %v", matches[1], err)
+			return nil
+		}
+
+		// Validate score range - reject out-of-range values
+		// Microsoft SCL valid range is -1 to 9
+		if score < -1 || score > 9 {
+			log.Printf("Warning: SCL score %d out of valid range [-1, 9], rejecting value", score)
+			return nil
+		}
+
+		result := &SCLResult{
+			Score:        score,
+			Description:  getSCLDescription(score),
+			HeaderSource: sanitizeHeader(headerSource),
+			RawHeader:    sanitizeHeader(header),
+		}
+
+		return result
+	}
+
+	return nil
+}
+
+// getSCLDescription returns a human-readable description for an SCL score
+func getSCLDescription(score int) string {
+	switch score {
+	case -1:
+		return "Skipped spam filtering (safe sender or SCL override)"
+	case 0, 1:
+		return "Not spam"
+	case 5, 6:
+		return "Spam"
+	case 7, 8, 9:
+		return "High confidence spam"
+	default:
+		if score >= 2 && score <= 4 {
+			return "Low spam probability"
+		}
+		return "Unknown spam confidence level"
+	}
+}
+
 // outputJSON outputs the report as JSON
 func outputJSON(report *EmailSecurityReport) {
 	// Sanitize raw headers if present
@@ -1077,6 +1185,21 @@ func outputText(report *EmailSecurityReport, verbose bool) {
 		}
 	}
 
+	// SCL Results
+	if report.SCL != nil {
+		fmt.Println("SCL (SPAM CONFIDENCE LEVEL) RESULTS")
+		fmt.Println("-" + strings.Repeat("-", 79))
+		fmt.Println("Microsoft's Spam Confidence Level indicates the likelihood of spam.")
+		fmt.Println()
+		fmt.Printf("SCL Score:   %d\n", report.SCL.Score)
+		fmt.Printf("Assessment:  %s\n", report.SCL.Description)
+		fmt.Printf("Source:      %s\n", report.SCL.HeaderSource)
+		if verbose && report.SCL.RawHeader != "" {
+			fmt.Printf("Raw Header:  %s\n", truncate(report.SCL.RawHeader, 80))
+		}
+		fmt.Println()
+	}
+
 	// Authentication Results Summary
 	if len(report.AuthResults) > 0 && verbose {
 		fmt.Println("AUTHENTICATION-RESULTS HEADERS")
@@ -1155,6 +1278,7 @@ func summarizeSecurity(report *EmailSecurityReport) {
 	spfPass := false
 	dkimPass := false
 	dmarcPass := false
+	isSpam := false
 
 	// Check SPF
 	for _, spf := range report.SPFResults {
@@ -1180,13 +1304,24 @@ func summarizeSecurity(report *EmailSecurityReport) {
 		}
 	}
 
+	// Check SCL for spam
+	if report.SCL != nil && report.SCL.Score >= 5 {
+		isSpam = true
+	}
+
 	fmt.Printf("SPF Authentication:   %s\n", formatBool(spfPass))
 	fmt.Printf("DKIM Authentication:  %s\n", formatBool(dkimPass))
 	fmt.Printf("DMARC Authentication: %s\n", formatBool(dmarcPass))
+	if report.SCL != nil {
+		fmt.Printf("Spam Confidence (SCL): %d (%s)\n", report.SCL.Score, report.SCL.Description)
+	}
 	fmt.Println()
 
 	// Overall assessment
-	if spfPass && dkimPass && dmarcPass {
+	if isSpam {
+		fmt.Println("Overall Assessment: SPAM DETECTED ✗")
+		fmt.Printf("This email has a spam confidence level of %d. Exercise extreme caution.\n", report.SCL.Score)
+	} else if spfPass && dkimPass && dmarcPass {
 		fmt.Println("Overall Assessment: SECURE ✓")
 		fmt.Println("This email passed all major authentication checks.")
 	} else if spfPass || dkimPass {
