@@ -1,4 +1,4 @@
-module github.com/charlesgreen/email-watch
+module github.com/leansecurity-co/email-watch
 
 go 1.25.2
 

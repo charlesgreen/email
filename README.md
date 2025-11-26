@@ -15,11 +15,15 @@ A Golang tool for analyzing email security authentication headers (SPF, DKIM, DM
 Requires Go 1.20 or later.
 
 ```bash
-# Build the binary
-go build -o email-watch main.go
+go install github.com/leansecurity-co/email-watch@latest
+```
 
-# Or install to $GOPATH/bin
-go install
+Or build from source:
+
+```bash
+git clone https://github.com/leansecurity-co/email-watch.git
+cd email-watch
+go build -o email-watch main.go
 ```
 
 ## Usage
