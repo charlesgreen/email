@@ -1,75 +1,90 @@
-# email-watch Makefile
+.PHONY: all build test test-unit test-integration test-verbose test-race coverage coverage-check lint fmt vet check clean deps help
 
-BINARY_NAME=email-watch
-GO=go
+BINARY_NAME := email
+GO := go
+LINTER := golangci-lint
+COVERAGE_THRESHOLD := 70
 
-.PHONY: all build test run clean fmt lint vet coverage help
+all: check build
 
-# Default target
-all: fmt vet test build
-
-# Build the binary
 build:
 	$(GO) build -o $(BINARY_NAME) .
 
-# Run tests
 test:
 	$(GO) test -v ./...
 
-# Run tests with coverage
+test-unit:
+	$(GO) test -v -short -tags=!integration ./...
+
+test-integration:
+	$(GO) test -v -tags=integration ./...
+
+test-verbose:
+	$(GO) test -v ./...
+
+test-race:
+	$(GO) test -race ./...
+
 coverage:
 	$(GO) test -coverprofile=coverage.out ./...
 	$(GO) tool cover -html=coverage.out -o coverage.html
-	@echo "Coverage report: coverage.html"
+	@echo "Coverage report generated: coverage.html"
 
-# Run the application (requires MSG_FILE argument)
-run: build
-	./$(BINARY_NAME) $(MSG_FILE)
+coverage-check:
+	@$(GO) test -coverprofile=coverage.out ./... > /dev/null
+	@total=$$(go tool cover -func=coverage.out | grep total | awk '{print $$3}' | sed 's/%//'); \
+	if [ -z "$$total" ]; then \
+		echo "Error: Could not calculate coverage"; \
+		exit 1; \
+	fi; \
+	echo "Total coverage: $$total%"; \
+	if [ $$(echo "$$total < $(COVERAGE_THRESHOLD)" | bc -l) -eq 1 ]; then \
+		echo "Coverage $$total% is below threshold $(COVERAGE_THRESHOLD)%"; \
+		exit 1; \
+	fi; \
+	echo "Coverage $$total% meets threshold $(COVERAGE_THRESHOLD)%"
 
-# Format code
 fmt:
-	$(GO) fmt ./...
+	gofmt -s -w .
 
-# Run go vet
 vet:
 	$(GO) vet ./...
 
-# Run staticcheck if installed
 lint:
-	@which staticcheck > /dev/null || (echo "Installing staticcheck..." && go install honnef.co/go/tools/cmd/staticcheck@latest)
-	staticcheck ./...
+	@which $(LINTER) > /dev/null || (echo "Installing $(LINTER)..." && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)
+	$(LINTER) run ./...
 
-# Clean build artifacts
+check: fmt vet lint test
+
 clean:
 	$(GO) clean
-	rm -f $(BINARY_NAME)
-	rm -f coverage.out coverage.html
+	rm -f $(BINARY_NAME) coverage.out coverage.html
 
-# Download dependencies
 deps:
 	$(GO) mod download
 	$(GO) mod tidy
 
-# Build for multiple platforms
-build-all: clean
-	GOOS=darwin GOARCH=amd64 $(GO) build -o $(BINARY_NAME)-darwin-amd64 .
-	GOOS=darwin GOARCH=arm64 $(GO) build -o $(BINARY_NAME)-darwin-arm64 .
-	GOOS=linux GOARCH=amd64 $(GO) build -o $(BINARY_NAME)-linux-amd64 .
-	GOOS=windows GOARCH=amd64 $(GO) build -o $(BINARY_NAME)-windows-amd64.exe .
-
-# Show help
 help:
-	@echo "email-watch Makefile targets:"
+	@echo "Available targets:"
+	@echo "  all              - Run check and build (default)"
+	@echo "  build            - Build the binary"
 	@echo ""
-	@echo "  make            - Format, vet, test, and build"
-	@echo "  make build      - Build the binary"
-	@echo "  make test       - Run tests with verbose output"
-	@echo "  make coverage   - Run tests with coverage report"
-	@echo "  make run MSG_FILE=<file.msg> - Build and run with a .msg file"
-	@echo "  make fmt        - Format Go code"
-	@echo "  make vet        - Run go vet"
-	@echo "  make lint       - Run staticcheck linter"
-	@echo "  make clean      - Remove build artifacts"
-	@echo "  make deps       - Download and tidy dependencies"
-	@echo "  make build-all  - Build for darwin, linux, and windows"
-	@echo "  make help       - Show this help"
+	@echo "Testing:"
+	@echo "  test             - Run all tests with verbose output"
+	@echo "  test-unit        - Run only unit tests (excludes integration tests)"
+	@echo "  test-integration - Run only integration tests (requires integration tag)"
+	@echo "  test-verbose     - Run all tests with verbose output (same as test)"
+	@echo "  test-race        - Run tests with race condition detection"
+	@echo "  coverage         - Generate coverage report (HTML)"
+	@echo "  coverage-check   - Check if coverage meets threshold ($(COVERAGE_THRESHOLD)%)"
+	@echo ""
+	@echo "Code Quality:"
+	@echo "  fmt              - Format code with gofmt"
+	@echo "  vet              - Run go vet"
+	@echo "  lint             - Run golangci-lint"
+	@echo "  check            - Run fmt, vet, lint, and test"
+	@echo ""
+	@echo "Maintenance:"
+	@echo "  clean            - Remove build artifacts and coverage files"
+	@echo "  deps             - Download and tidy dependencies"
+	@echo "  help             - Show this help message"

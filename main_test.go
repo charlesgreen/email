@@ -325,9 +325,7 @@ func TestExtractSCLResults(t *testing.T) {
 			// Convert map to mail.Header
 			header := make(mail.Header)
 			for key, values := range tt.headers {
-				for _, value := range values {
-					header[key] = append(header[key], value)
-				}
+				header[key] = append(header[key], values...)
 			}
 
 			result := extractSCLResults(header)

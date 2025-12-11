@@ -173,7 +173,7 @@ func parseEmailFile(filename string, includeRawHeaders bool) (*EmailSecurityRepo
 	if err != nil {
 		return nil, eris.Wrap(err, "failed to open MSG file")
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Get file info for size
 	stat, err := f.Stat()
@@ -279,7 +279,7 @@ func extractEmailFromMsg(r io.ReaderAt, size int64) ([]byte, error) {
 				}
 				// Use anonymous function for proper defer scoping
 				data, err := func() ([]byte, error) {
-					defer rc.Close()
+					defer func() { _ = rc.Close() }()
 					// Limit read size to prevent excessive memory use
 					limitReader := io.LimitReader(rc, MaxUncompressedSize)
 					return io.ReadAll(limitReader)
@@ -914,7 +914,9 @@ func parseARCHeader(header string) *ARCResult {
 
 	// Extract i= (instance)
 	if match := regexp.MustCompile(`i=(\d+)`).FindStringSubmatch(header); len(match) > 1 {
-		fmt.Sscanf(match[1], "%d", &result.Instance)
+		if instance, err := strconv.Atoi(match[1]); err == nil {
+			result.Instance = instance
+		}
 	}
 
 	return result

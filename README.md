@@ -15,31 +15,37 @@ A Golang tool for analyzing email security authentication headers (SPF, DKIM, DM
 Requires Go 1.20 or later.
 
 ```bash
-go install github.com/leansecurity-co/email-watch@latest
+go install github.com/leansecurity-co/email@latest
+```
+
+To uninstall:
+
+```bash
+rm $(go env GOPATH)/bin/email
 ```
 
 Or build from source:
 
 ```bash
-git clone https://github.com/leansecurity-co/email-watch.git
-cd email-watch
-go build -o email-watch main.go
+git clone https://github.com/leansecurity-co/email.git
+cd email
+go build -o email main.go
 ```
 
 ## Usage
 
 ```bash
-./email-watch [-v] [-json] <email-file>
+./email [-v] [-json] <email-file>
 
 Options:
   -v       Verbose output (include all raw headers)
   -json    Output results as JSON
 
 Examples:
-  ./email-watch sample.msg
-  ./email-watch sample.eml
-  ./email-watch -v sample.msg
-  ./email-watch -json sample.eml > results.json
+  ./email sample.msg
+  ./email sample.eml
+  ./email -v sample.msg
+  ./email -json sample.eml > results.json
 ```
 
 ## Authentication Results

@@ -1,4 +1,4 @@
-module github.com/leansecurity-co/email-watch
+module github.com/leansecurity-co/email
 
 go 1.25.2
 
