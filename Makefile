@@ -1,4 +1,4 @@
-.PHONY: all build test test-unit test-integration test-verbose test-race coverage coverage-check lint fmt vet check clean deps help
+.PHONY: all build test test-unit test-integration test-verbose test-race coverage coverage-check lint fmt fmt-check vet check ci clean deps help
 
 BINARY_NAME := email
 GO := go
@@ -47,6 +47,9 @@ coverage-check:
 fmt:
 	gofmt -s -w .
 
+fmt-check:
+	@test -z "$$(gofmt -s -l . | tee /dev/stderr)" || (echo "Code is not formatted. Run 'make fmt'" && exit 1)
+
 vet:
 	$(GO) vet ./...
 
@@ -55,6 +58,8 @@ lint:
 	$(LINTER) run ./...
 
 check: fmt vet lint test
+
+ci: fmt-check vet lint test
 
 clean:
 	$(GO) clean
@@ -80,9 +85,11 @@ help:
 	@echo ""
 	@echo "Code Quality:"
 	@echo "  fmt              - Format code with gofmt"
+	@echo "  fmt-check        - Check formatting without modifying (for CI)"
 	@echo "  vet              - Run go vet"
 	@echo "  lint             - Run golangci-lint"
 	@echo "  check            - Run fmt, vet, lint, and test"
+	@echo "  ci               - Run fmt-check, vet, lint, and test (for CI)"
 	@echo ""
 	@echo "Maintenance:"
 	@echo "  clean            - Remove build artifacts and coverage files"
