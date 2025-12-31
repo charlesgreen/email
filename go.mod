@@ -1,4 +1,4 @@
-module github.com/leansecurity-co/email
+module github.com/charlesgreen/email
 
 go 1.25.2
 

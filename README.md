@@ -1,6 +1,6 @@
 # Email
 
-![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/leansecurity-co/email?utm_source=oss&utm_medium=github&utm_campaign=leansecurity-co%2Femail&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/charlesgreen/email?utm_source=oss&utm_medium=github&utm_campaign=charlesgreen%2Femail&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 A Golang tool for analyzing email security authentication headers (SPF, DKIM, DMARC, and ARC) from `.msg` and `.eml` files, plus DMARC aggregate report analysis with forensic capabilities.
 
@@ -29,10 +29,10 @@ Requires Go 1.20 or later.
 
 ```bash
 # Install latest version
-go install github.com/leansecurity-co/email@latest
+go install github.com/charlesgreen/email@latest
 
 # Install specific version (v0.2.0 - includes DMARC report analysis)
-go install github.com/leansecurity-co/email@v0.2.0
+go install github.com/charlesgreen/email@v0.2.0
 ```
 
 To uninstall:
@@ -44,7 +44,7 @@ rm $(go env GOPATH)/bin/email
 Or build from source:
 
 ```bash
-git clone https://github.com/leansecurity-co/email.git
+git clone https://github.com/charlesgreen/email.git
 cd email
 go build -o email main.go
 ```
